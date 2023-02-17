@@ -196,3 +196,7 @@ variable "storage_autoscaling_disable_scale_in" {
   default     = false
   description = "If the value is true, scale in is disabled and the target tracking policy won't remove capacity from the scalable resource."
 }
+
+variable "preserve_security_group_id" {
+  default = false //for backwards compatibility.
+}

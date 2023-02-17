@@ -1,5 +1,5 @@
 locals {
-  enabled = module.this.enabled
+  enabled = module.context.enabled
 
   brokers = local.enabled ? flatten(data.aws_msk_broker_nodes.default[0].node_info_list.*.endpoints) : []
   # If var.storage_autoscaling_max_capacity is not set, don't autoscale past current size
@@ -73,14 +73,15 @@ data "aws_msk_broker_nodes" "default" {
 }
 
 module "broker_security_group" {
-  source  = "cloudposse/security-group/aws"
-  version = "1.0.1"
+  source  = "registry.terraform.io/SevenPicoForks/security-group/aws"
+  version = "3.0.0"
 
   enabled                       = local.enabled && var.create_security_group
   security_group_name           = var.security_group_name
   create_before_destroy         = var.security_group_create_before_destroy
   security_group_create_timeout = var.security_group_create_timeout
   security_group_delete_timeout = var.security_group_delete_timeout
+  preserve_security_group_id    = var.preserve_security_group_id
 
   security_group_description = var.security_group_description
   allow_all_egress           = true
@@ -103,13 +104,13 @@ module "broker_security_group" {
   ]
   vpc_id = var.vpc_id
 
-  context = module.this.context
+  context = module.context.self
 }
 
 resource "aws_msk_configuration" "config" {
   count          = local.enabled ? 1 : 0
   kafka_versions = [var.kafka_version]
-  name           = module.this.id
+  name           = module.context.id
   description    = "Manages an Amazon Managed Streaming for Kafka configuration"
 
   server_properties = join("\n", [for k in keys(var.properties) : format("%s = %s", k, var.properties[k])])
@@ -120,7 +121,7 @@ resource "aws_msk_cluster" "default" {
   #bridgecrew:skip=BC_AWS_LOGGING_18:Skipping `Amazon MSK cluster logging is not enabled` check since it can be enabled with cloudwatch_logs_enabled = true
   #bridgecrew:skip=BC_AWS_GENERAL_32:Skipping `MSK cluster encryption at rest and in transit is not enabled` check since it can be enabled with encryption_in_cluster = true
   count                  = local.enabled ? 1 : 0
-  cluster_name           = module.this.id
+  cluster_name           = module.context.id
   kafka_version          = var.kafka_version
   number_of_broker_nodes = var.broker_per_zone * length(var.subnet_ids)
   enhanced_monitoring    = var.enhanced_monitoring
@@ -201,7 +202,7 @@ resource "aws_msk_cluster" "default" {
     ]
   }
 
-  tags = module.this.tags
+  tags = module.context.tags
 }
 
 resource "aws_msk_scram_secret_association" "default" {
@@ -218,11 +219,11 @@ module "hostname" {
   version = "0.12.2"
 
   enabled  = local.enabled && length(var.zone_id) > 0
-  dns_name = "${module.this.name}-broker-${count.index + 1}"
+  dns_name = "${module.context.name}-broker-${count.index + 1}"
   zone_id  = var.zone_id
   records  = local.enabled ? [local.brokers[count.index]] : []
 
-  context = module.this.context
+  context = module.context.legacy
 }
 
 resource "aws_appautoscaling_target" "default" {
